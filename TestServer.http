@@ -1,5 +1,6 @@
-@TestServer_HostAddress = http://localhost:5000
+@TestServer_HostAddress = https://localhost:7020
 @ApiKey = replace-with-your-api-key
+@AdminApiKey = replace-with-your-admin-api-key
 
 POST {{TestServer_HostAddress}}/api/message
 Content-Type: application/json
@@ -19,11 +20,12 @@ X-API-Key: {{ApiKey}}
   "message": "Server info"
 }
 
-### Requires Shutdown:Enabled=true and sufficient OS privileges
+### Requires Shutdown:Enabled=true, both keys, and sufficient OS privileges
 
 POST {{TestServer_HostAddress}}/api/message
 Content-Type: application/json
 X-API-Key: {{ApiKey}}
+X-Admin-API-Key: {{AdminApiKey}}
 
 {
   "message": "Shutdown Linux machine"
