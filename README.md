@@ -194,6 +194,82 @@ Remove the temporary UFW rule after testing if it is no longer needed:
 sudo ufw delete allow 5000/tcp
 ```
 
+## Test from Android with Termux
+
+Install a current Termux build from [F-Droid](https://f-droid.org/packages/com.termux/) or the official [Termux GitHub releases](https://github.com/termux/termux-app/releases). Termux also has an experimental Google Play branch for Android 11 or newer, but the official project notes that it has missing functionality and bugs compared with the stable F-Droid build. Legacy Google Play builds remain unsupported. If you use Termux add-ons, install Termux and every add-on from the same source because builds from different sources use different signatures.
+
+Connect the Android device to the same trusted Wi-Fi network as the server. In Termux, update the packages and install Python:
+
+```bash
+pkg update
+pkg upgrade
+pkg install python
+python --version
+```
+
+The client requires Python 3.10 or newer and does not require any `pip` packages.
+
+Copy `testserver_client.py` into the Android device's **Download** folder. Then give Termux shared-storage access and copy the file into the Termux home directory:
+
+```bash
+termux-setup-storage
+cp ~/storage/downloads/testserver_client.py ~/
+cd ~
+```
+
+Android should display a storage permission prompt after `termux-setup-storage`. If the downloaded file has a suffix such as `(1)`, use its actual filename in the `cp` command.
+
+Configure the client with the server's LAN address and the same keys used by the server. Replace `192.168.1.50` with the server's actual address:
+
+```bash
+export TESTSERVER_URL="http://192.168.1.50:5000"
+export TESTSERVER_API_KEY="replace-with-a-long-random-key"
+export TESTSERVER_ADMIN_KEY="replace-with-a-different-random-key"
+```
+
+Send a safe test command:
+
+```bash
+python testserver_client.py --command "Ping"
+```
+
+The expected output is:
+
+```text
+Warning: HTTP sends API keys without encryption.
+HTTP 200
+{
+  "message": "Pong"
+}
+```
+
+Start interactive mode with:
+
+```bash
+python testserver_client.py
+```
+
+Type `quit`, `exit`, or an empty line to leave interactive mode. Exported variables last only for the current Termux shell session, so set them again after opening a new session.
+
+If the connection fails:
+
+- Confirm that the server is running with the temporary LAN configuration on `0.0.0.0:5000`.
+- Confirm that Android is using the same Wi-Fi network rather than mobile data.
+- Check the server IP address again because DHCP may have changed it.
+- Disable any VPN temporarily if it prevents access to local network addresses.
+- Check the host firewall and the Wi-Fi router's guest/client-isolation setting.
+
+If the server has been separately configured to listen for HTTPS connections on the LAN, use its `https://` URL normally when its certificate is publicly trusted. For a self-signed certificate during local testing only, add `--insecure`:
+
+```bash
+python testserver_client.py \
+  --url "https://192.168.1.50:7020" \
+  --insecure \
+  --command "Ping"
+```
+
+Do not use `--insecure` for an internet-accessible deployment because it disables certificate verification.
+
 ## HTTPS for real deployments
 
 Do not expose the temporary HTTP configuration to the internet. Use a valid TLS certificate and either configure Kestrel for HTTPS or place the application behind a properly configured reverse proxy such as Caddy or Nginx.
