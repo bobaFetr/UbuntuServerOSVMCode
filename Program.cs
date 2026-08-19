@@ -2,6 +2,8 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
+
 builder.Services.AddHttpsRedirection(options => options.HttpsPort = 443);
 builder.Services.AddRateLimiter(options =>
 {
