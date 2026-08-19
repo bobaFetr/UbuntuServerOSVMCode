@@ -210,6 +210,9 @@ def main() -> int:
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("\nRequest cancelled.", file=sys.stderr)
+        return 130
     except (urllib.error.URLError, TimeoutError) as error:
         print(f"Connection failed: {error}", file=sys.stderr)
         return 1
