@@ -87,16 +87,8 @@ public static class MessageEndpoints
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
-        if (!OperatingSystem.IsLinux())
-            return Results.Json(new ServerMessage("Restart is only supported on Linux."),
-                statusCode: StatusCodes.Status501NotImplemented);
-
-        var delayMinutes = Math.Clamp(configuration.GetValue("Restart:DelayMinutes", 1), 1, 60);
-        await LinuxShutdown.ScheduleRestartAsync(delayMinutes, cancellationToken);
-        logger.LogWarning("Linux machine restart scheduled in {DelayMinutes} minute(s).", delayMinutes);
-
-        return Results.Accepted(value: new ServerMessage(
-            $"Linux restart scheduled in {delayMinutes} minute(s). Run 'shutdown -c' on the machine to cancel it."));
+        return await PowerOperations.ScheduleAsync(
+            PowerOperation.Restart, configuration, logger, cancellationToken, legacyResponse: true);
     }
 
     private static async Task<IResult> ShutdownLinuxMachine(
@@ -123,15 +115,7 @@ public static class MessageEndpoints
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
-        if (!OperatingSystem.IsLinux())
-            return Results.Json(new ServerMessage("Shutdown is only supported on Linux."),
-                statusCode: StatusCodes.Status501NotImplemented);
-
-        var delayMinutes = Math.Clamp(configuration.GetValue("Shutdown:DelayMinutes", 1), 1, 60);
-        await LinuxShutdown.ScheduleAsync(delayMinutes, cancellationToken);
-        logger.LogWarning("Linux machine shutdown scheduled in {DelayMinutes} minute(s).", delayMinutes);
-
-        return Results.Accepted(value: new ServerMessage(
-            $"Linux shutdown scheduled in {delayMinutes} minute(s). Run 'shutdown -c' on the machine to cancel it."));
+        return await PowerOperations.ScheduleAsync(
+            PowerOperation.Shutdown, configuration, logger, cancellationToken, legacyResponse: true);
     }
 }

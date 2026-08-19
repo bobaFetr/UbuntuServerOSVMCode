@@ -1,12 +1,12 @@
 # TestServer
 
-TestServer is a small ASP.NET Core HTTP API for querying Linux server information and sending a limited set of text commands. It exposes one endpoint:
+TestServer is a small ASP.NET Core HTTP API for querying server information and managing Linux power operations. New clients should use the versioned structured API. The original text-command endpoint remains available for compatibility:
 
 ```text
 POST /api/message
 ```
 
-Every request to this endpoint requires an API key. Restart and shutdown commands additionally require a separate administrator key and are disabled by default.
+Standard structured routes require `X-API-Key`. Structured restart and shutdown routes require only `X-Admin-API-Key`. Legacy restart and shutdown commands require both keys. Both power operations are disabled by default.
 
 ## Requirements
 
@@ -36,9 +36,9 @@ openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-The normal API key is sent in `X-API-Key`. When restart or shutdown is enabled, its command additionally checks the administrator key sent in `X-Admin-API-Key`.
+The standard API key is sent in `X-API-Key`. The administrator key is sent in `X-Admin-API-Key`. The structured API selects one key according to the route; the legacy command endpoint always checks the standard key first and additionally checks the administrator key for enabled power commands.
 
-If `Authentication__ApiKey` is missing or empty, protected requests fail with HTTP `503`.
+If the key required by a protected route is missing from server configuration, that route fails with HTTP `503`.
 
 ## Run locally
 
@@ -63,7 +63,24 @@ dotnet dev-certs https --trust
 
 The trust option may not be supported on every Linux desktop. For local testing only, the Python client also provides `--insecure`.
 
-## Available commands
+## Versioned structured API
+
+Use these routes for new integrations:
+
+| Method and route | Purpose | Required header |
+|---|---|---|
+| `GET /api/v1/health/live` | Confirms that the API process is responding | `X-API-Key` |
+| `GET /api/v1/health/ready` | Confirms that required keys are configured | `X-API-Key` |
+| `GET /api/v1/server/info` | Returns basic server information | `X-API-Key` |
+| `GET /api/v1/server/diagnostics` | Returns detailed diagnostics | `X-API-Key` |
+| `POST /api/v1/power/restart` | Schedules a Linux restart | `X-Admin-API-Key` |
+| `POST /api/v1/power/shutdown` | Schedules a Linux shutdown | `X-Admin-API-Key` |
+
+Readiness requires the standard key configuration. It requires the administrator key configuration only when restart or shutdown is enabled.
+
+Standard structured routes and the legacy endpoint allow 30 requests per minute per observed IP. Structured power routes have a separate limit of 5 requests per minute per observed IP.
+
+## Legacy text commands
 
 Commands are case-insensitive. Leading and trailing whitespace is removed. A message longer than 256 characters is rejected.
 
@@ -115,6 +132,22 @@ Send one command and exit:
 ```bash
 python3 testserver_client.py --command "Ping"
 python3 testserver_client.py --command "Server info"
+```
+
+For new clients, use a structured action instead:
+
+```bash
+python3 testserver_client.py --action live
+python3 testserver_client.py --action ready
+python3 testserver_client.py --action info
+python3 testserver_client.py --action diagnostics
+```
+
+Structured power actions use the administrator key and do not require the standard key:
+
+```bash
+python3 testserver_client.py --action restart
+python3 testserver_client.py --action shutdown
 ```
 
 Display all client options:
@@ -296,7 +329,14 @@ export Shutdown__Enabled=true
 export Shutdown__DelayMinutes=1
 ```
 
-The configured delay is clamped to a range of 1 through 60 minutes. Send the operation with both client keys configured:
+The configured delay is clamped to a range of 1 through 60 minutes. The preferred structured actions require only `TESTSERVER_ADMIN_KEY`:
+
+```bash
+python3 testserver_client.py --action restart
+python3 testserver_client.py --action shutdown
+```
+
+For compatibility, the legacy commands below require both client keys:
 
 ```bash
 python3 testserver_client.py --command "Restart Linux machine"
@@ -337,13 +377,13 @@ X-Admin-API-Key: replace-with-a-different-random-key
 | `200` | Command completed successfully |
 | `202` | Restart or shutdown was successfully scheduled |
 | `400` | Empty, oversized, malformed, or unknown command |
-| `401` | Missing or incorrect normal API key |
+| `401` | Missing or incorrect key required by the selected route |
 | `403` | Power operation is disabled or the administrator key is invalid |
 | `499` | The client disconnected while a command was running |
 | `429` | Per-IP limit of 30 requests per minute was exceeded |
 | `500` | Command processing or host operation failed |
 | `501` | Restart or shutdown was requested on a non-Linux host |
-| `503` | The normal API key is not configured |
+| `503` | The key required by the selected route is not configured |
 
 ## Safe test checklist
 
@@ -356,4 +396,4 @@ Run these tests before enabling any power operation:
 5. Send `Shutdown Linux machine` while shutdown is disabled and expect HTTP `403`.
 6. If testing administrator authorization, enable the operation only on a disposable VM, omit the admin key, and expect HTTP `403`.
 
-The API rate limiter allows 30 requests per minute for each directly observed remote IP address and does not queue excess requests.
+The standard and legacy API limiter allows 30 requests per minute for each directly observed remote IP address. Structured power routes allow 5 requests per minute. Neither limiter queues excess requests, and `429` responses include `Retry-After` when the limiter provides it.

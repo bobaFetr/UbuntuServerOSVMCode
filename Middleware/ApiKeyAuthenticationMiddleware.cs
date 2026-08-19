@@ -6,34 +6,47 @@ public sealed class ApiKeyAuthenticationMiddleware(
     IConfiguration configuration,
     ILogger<ApiKeyAuthenticationMiddleware> logger)
 {
-    private const string HeaderName = "X-API-Key";
-
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<ApiKeyProtectedAttribute>() is null)
+        var protection = context.GetEndpoint()?.Metadata.GetMetadata<ApiKeyProtectedAttribute>();
+        if (protection is null)
         {
             await next(context);
             return;
         }
 
-        var configuredKey = configuration["Authentication:ApiKey"];
+        var isAdmin = protection.Access == ApiKeyAccess.Admin;
+        var headerName = isAdmin ? "X-Admin-API-Key" : "X-API-Key";
+        var configurationName = isAdmin ? "Authentication:AdminApiKey" : "Authentication:ApiKey";
+        var environmentName = isAdmin ? "Authentication__AdminApiKey" : "Authentication__ApiKey";
+        var configuredKey = configuration[configurationName];
+
         if (string.IsNullOrWhiteSpace(configuredKey))
         {
-            logger.LogCritical("API authentication is not configured. Set Authentication__ApiKey.");
-            await WriteError(context, StatusCodes.Status503ServiceUnavailable,
-                "API authentication is not configured.");
+            logger.LogCritical(
+                "{Access} API authentication is not configured. Set {EnvironmentName}.",
+                protection.Access,
+                environmentName);
+            await WriteError(
+                context,
+                StatusCodes.Status503ServiceUnavailable,
+                $"{protection.Access} API authentication is not configured.");
             return;
         }
 
-        var providedKeys = context.Request.Headers[HeaderName];
+        var providedKeys = context.Request.Headers[headerName];
         if (providedKeys.Count != 1 || string.IsNullOrWhiteSpace(providedKeys[0]) ||
             !ApiKeyComparer.KeysMatch(configuredKey, providedKeys[0]!))
         {
-            logger.LogWarning("Rejected unauthenticated API request from {RemoteAddress}.",
+            logger.LogWarning(
+                "Rejected unauthenticated {Access} API request from {RemoteAddress}.",
+                protection.Access,
                 context.Connection.RemoteIpAddress);
-            context.Response.Headers.Append("WWW-Authenticate", "ApiKey");
-            await WriteError(context, StatusCodes.Status401Unauthorized,
-                "A valid X-API-Key header is required.");
+            context.Response.Headers.Append("WWW-Authenticate", isAdmin ? "AdminApiKey" : "ApiKey");
+            await WriteError(
+                context,
+                StatusCodes.Status401Unauthorized,
+                $"A valid {headerName} header is required.");
             return;
         }
 
@@ -47,7 +60,16 @@ public sealed class ApiKeyAuthenticationMiddleware(
     }
 }
 
-public sealed class ApiKeyProtectedAttribute : Attribute;
+public enum ApiKeyAccess
+{
+    Standard,
+    Admin
+}
+
+public sealed class ApiKeyProtectedAttribute(ApiKeyAccess access = ApiKeyAccess.Standard) : Attribute
+{
+    public ApiKeyAccess Access { get; } = access;
+}
 
 public static class ApiKeyComparer
 {

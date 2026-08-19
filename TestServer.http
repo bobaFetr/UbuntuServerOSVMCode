@@ -2,6 +2,21 @@
 @ApiKey = replace-with-your-api-key
 @AdminApiKey = replace-with-your-admin-api-key
 
+GET {{TestServer_HostAddress}}/api/v1/health/live
+X-API-Key: {{ApiKey}}
+
+###
+
+GET {{TestServer_HostAddress}}/api/v1/server/info
+X-API-Key: {{ApiKey}}
+
+### Power operations are disabled by default
+
+POST {{TestServer_HostAddress}}/api/v1/power/restart
+X-Admin-API-Key: {{AdminApiKey}}
+
+### Legacy command endpoint
+
 POST {{TestServer_HostAddress}}/api/message
 Content-Type: application/json
 X-API-Key: {{ApiKey}}
@@ -10,17 +25,7 @@ X-API-Key: {{ApiKey}}
   "message": "Ping"
 }
 
-###
-
-POST {{TestServer_HostAddress}}/api/message
-Content-Type: application/json
-X-API-Key: {{ApiKey}}
-
-{
-  "message": "Server info"
-}
-
-### Requires Shutdown:Enabled=true, both keys, and sufficient OS privileges
+### Legacy power commands require both keys and an enabled operation
 
 POST {{TestServer_HostAddress}}/api/message
 Content-Type: application/json
