@@ -379,8 +379,8 @@ X-Admin-API-Key: replace-with-a-different-random-key
 | `400` | Empty, oversized, malformed, or unknown command |
 | `401` | Missing or incorrect key required by the selected route |
 | `403` | Power operation is disabled or the administrator key is invalid |
-| `499` | The client disconnected while a command was running |
-| `429` | Per-IP limit of 30 requests per minute was exceeded |
+| `499` | Command processing was cancelled after the client disconnected; the disconnected client may not receive this response |
+| `429` | The applicable per-IP rate limit was exceeded (30 requests per minute for standard and legacy routes, or 5 for structured power routes) |
 | `500` | Command processing or host operation failed |
 | `501` | Restart or shutdown was requested on a non-Linux host |
 | `503` | The key required by the selected route is not configured |
