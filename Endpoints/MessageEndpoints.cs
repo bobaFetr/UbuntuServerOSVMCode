@@ -40,6 +40,7 @@ public static class MessageEndpoints
                     context, configuration, logger, cancellationToken),
                 "SERVER INFO" => Results.Ok(ServerDiagnostics.GetServerInfo()),
                 "SERVER DIAGNOSTICS" => Results.Ok(ServerDiagnostics.GetDiagnostics()),
+                //"Kill AI" => Results.Ok(ServerDiagnostics.GetDiagnostics()),
                 "ALL AVAILABLE COMMANDS" or "ALL AVAIBLE COMAMNDS" => Results.Ok(
                     new ServerMessage(
                         "Available commands: Health status, Ping, Server time, Server info, " +
