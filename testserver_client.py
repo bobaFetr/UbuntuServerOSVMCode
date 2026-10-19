@@ -84,6 +84,28 @@ def send_command(
         return error.code, decode_response(error.read())
 
 
+def stream_task_monitor(base_url: str, api_key: str, timeout: float, insecure: bool) -> int:
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/api/message",
+        data=json.dumps({"message": "TaskM"}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream",
+                 "X-API-Key": api_key},
+        method="POST",
+    )
+    context = ssl._create_unverified_context() if insecure else None
+    try:
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
+            print("TaskM live output (Ctrl+C to stop)", flush=True)
+            for raw_line in response:
+                line = raw_line.decode("utf-8").rstrip("\r\n")
+                if line.startswith("data: "):
+                    print(json.loads(line[6:])["line"], flush=True)
+        return 0
+    except urllib.error.HTTPError as error:
+        print_response(error.code, decode_response(error.read()))
+        return 1
+
+
 def send_action(
     base_url: str,
     action: str,
@@ -176,6 +198,9 @@ def main() -> int:
             print("Missing API key. Set TESTSERVER_API_KEY or use --api-key.", file=sys.stderr)
             return 2
 
+        if args.command and args.command.strip().casefold() == "taskm":
+            return stream_task_monitor(args.url, args.api_key, args.timeout, args.insecure)
+
         if args.command:
             status, response = send_command(
                 args.url,
@@ -197,6 +222,10 @@ def main() -> int:
 
             if not command or command.lower() in {"quit", "exit"}:
                 return 0
+
+            if command.casefold() == "taskm":
+                stream_task_monitor(args.url, args.api_key, args.timeout, args.insecure)
+                continue
 
             status, response = send_command(
                 args.url,

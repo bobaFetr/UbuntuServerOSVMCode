@@ -1,5 +1,36 @@
 public static class MessageEndpoints
 {
+    private sealed record CommandDefinition(
+        string Name,
+        Func<HttpContext, IConfiguration, ILogger<Program>, CancellationToken, Task<IResult>> Execute,
+        params string[] Aliases);
+
+    // Execution and discovery share this registry: register new commands only here.
+    private static readonly CommandDefinition[] Commands =
+    [
+        Simple("Health status", () => Results.Ok(new ServerMessage("Status OK"))),
+        Simple("TaskM", () => new TaskMonitor()),
+        Simple("Ping", () => Results.Ok(new ServerMessage("Pong"))),
+        Simple("AI make this person pregnant", () => Results.Ok(
+            new ServerMessage("I can't do that, but I can help answer questions."))),
+        Simple("What is the item the cursor is pointing at?", ObjectRecognitionUnavailable,
+            "What is the item the sursor is pointing at?"),
+        Simple("Server time", () => Results.Ok(new ServerMessage(DateTimeOffset.UtcNow.ToString("O")))),
+        new("Shutdown Linux machine", ShutdownLinuxMachine),
+        new("Restart Linux machine", RestartLinuxMachine),
+        Simple("Server info", () => Results.Ok(ServerDiagnostics.GetServerInfo())),
+        Simple("Server diagnostics", () => Results.Ok(ServerDiagnostics.GetDiagnostics())),
+        Simple("Kill AI", () => Results.Ok(new ServerMessage("AI has been terminated."))),
+        Simple("All available commands", ListCommands,
+            "All avaible comamnds", "All commands", "All comamnds")
+    ];
+
+    private static CommandDefinition Simple(string name, Func<IResult> execute, params string[] aliases) =>
+        new(name, (_, _, _, _) => Task.FromResult(execute()), aliases);
+
+    private static IResult ListCommands() => Results.Ok(new ServerMessage(
+        $"Available commands: {string.Join(", ", Commands.Select(command => command.Name))}."));
+
     public static IEndpointRouteBuilder MapMessageEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/api/message", HandleMessage)
@@ -25,28 +56,14 @@ public static class MessageEndpoints
 
         try
         {
-            return command.ToUpperInvariant() switch
-            {
-                "HEALTH STATUS" => Results.Ok(new ServerMessage("Status OK")),
-                "PING" => Results.Ok(new ServerMessage("Pong")),
-                "AI MAKE THIS PERSON PREGNANT" => Results.Ok(
-                    new ServerMessage("I can't do that, but I can help answer questions.")),
-                "WHAT IS THE ITEM THE CURSOR IS POINTING AT?" => ObjectRecognitionUnavailable(),
-                "WHAT IS THE ITEM THE SURSOR IS POINTING AT?" => ObjectRecognitionUnavailable(),
-                "SERVER TIME" => Results.Ok(new ServerMessage(DateTimeOffset.UtcNow.ToString("O"))),
-                "SHUTDOWN LINUX MACHINE" => await ShutdownLinuxMachine(
-                    context, configuration, logger, cancellationToken),
-                "RESTART LINUX MACHINE" => await RestartLinuxMachine(
-                    context, configuration, logger, cancellationToken),
-                "SERVER INFO" => Results.Ok(ServerDiagnostics.GetServerInfo()),
-                "SERVER DIAGNOSTICS" => Results.Ok(ServerDiagnostics.GetDiagnostics()),
-                "Kill AI" => Results.Ok(new ServerMessage("AI has been terminated.")),
-                "ALL AVAILABLE COMMANDS" or "ALL AVAIBLE COMAMNDS" => Results.Ok(
-                    new ServerMessage(
-                        "Available commands: Health status, Ping, Server time, Server info, " +
-                        "Server diagnostics, Shutdown Linux machine, Restart Linux machine, All available commands.")),
-                _ => Results.BadRequest(new ServerMessage("Unknown command"))
-            };
+            var definition = Commands.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, command, StringComparison.OrdinalIgnoreCase) ||
+                candidate.Aliases.Any(alias =>
+                    string.Equals(alias, command, StringComparison.OrdinalIgnoreCase)));
+
+            return definition is null
+                ? Results.BadRequest(new ServerMessage("Unknown command"))
+                : await definition.Execute(context, configuration, logger, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

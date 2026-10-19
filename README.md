@@ -397,3 +397,30 @@ Run these tests before enabling any power operation:
 6. If testing administrator authorization, enable the operation only on a disposable VM, omit the admin key, and expect HTTP `403`.
 
 The standard and legacy API limiter allows 30 requests per minute for each directly observed remote IP address. Structured power routes allow 5 requests per minute. Neither limiter queues excess requests, and `429` responses include `Retry-After` when the limiter provides it.
+
+## Live task monitor (TaskM)
+
+Send `POST /api/message` with `X-API-Key` and `{"message":"TaskM"}`.
+On Linux, the server starts `top -b -d 1 -w 200` and streams its output
+in the same HTTP response as `text/event-stream`. Each SSE event has type
+`top` and JSON data `{"line":"<one output line>"}`. Blank output lines
+are included. Read events incrementally and append each decoded line to
+the display; a new `top -` header starts the next screen refresh.
+The response stays open until the device disconnects or the server stops;
+disconnecting terminates that session's top process. At most four sessions
+can run concurrently (additional sessions receive HTTP 429). Normal API
+key authentication and request rate limits apply. Missing top returns 503;
+non-Linux systems return 501. Streaming errors after headers are sent close
+the connection. Top reports the processes visible to the server account.
+
+The Python client displays the stream with:
+
+```bash
+python3 testserver_client.py --command TaskM
+```
+
+Press Ctrl+C to disconnect. Device clients must support streaming POST
+responses and SSE parsing; reading the entire response as a single JSON
+object will not work. Browser EventSource cannot send this POST or the
+API-key header; use a streaming fetch client instead. Reverse proxies must
+allow long-lived responses and disable buffering for this stream.
